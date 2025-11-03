@@ -1,0 +1,11 @@
+torch>=2.2
+torchvision>=0.17
+timm>=0.9.16
+pyyaml
+opencv-python
+pycocotools
+albumentations
+matplotlib
+numpy
+tqdm
+wandb

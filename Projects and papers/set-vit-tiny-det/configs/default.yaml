@@ -1,0 +1,48 @@
+---
+```yaml
+project: set-vit
+seed: 42
+device: cuda
+precision: amp
+
+data:
+  dataset: coco
+  coco_root: /path/to/coco    # set in coco_small.yaml if different
+  train_ann: annotations/instances_train2017.json
+  val_ann: annotations/instances_val2017.json
+  train_imgs: train2017
+  val_imgs: val2017
+  img_size: 800
+  workers: 8
+  batch_size: 8
+
+model:
+  name: deformable_detr_r50
+  num_classes: 91
+  # HBS
+  hbs:
+    enabled: true
+    reduction: 4         # channel reduction r
+    kernel_schedule: stride_log2   # map stride->odd K as in SET
+    dilate_mask: 1
+  # API
+  api:
+    enabled: true
+    rho: 0.5             # L2 radius
+    lambda_cls: 1.0
+    lambda_reg: 0.0
+
+optim:
+  name: adamw
+  lr: 2.0e-4
+  weight_decay: 0.05
+  epochs: 36
+  warmup_epochs: 1
+  grad_clip: 0.1
+
+loss:
+  aux_weight: 0.5        # weight for auxiliary (HBS+API) path
+
+log:
+  interval: 50
+  out_dir: ./runs
