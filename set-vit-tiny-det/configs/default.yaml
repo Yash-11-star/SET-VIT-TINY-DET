@@ -1,48 +1,75 @@
----
-```yaml
-project: set-vit
-seed: 42
-device: cuda
-precision: amp
+# Vision Transformer for Tiny Object Detection - Default Configuration
 
-data:
-  dataset: coco
-  coco_root: /path/to/coco    # set in coco_small.yaml if different
-  train_ann: annotations/instances_train2017.json
-  val_ann: annotations/instances_val2017.json
-  train_imgs: train2017
-  val_imgs: val2017
-  img_size: 800
-  workers: 8
-  batch_size: 8
+# Model Configuration
+MODEL:
+  NAME: "TinyObjectViT"
+  IMAGE_SIZE: 384
+  PATCH_SIZE: 16
+  NUM_CLASSES: 10
+  NUM_HEADS: 12
+  NUM_LAYERS: 12
+  MLP_DIM: 3072
+  DROPOUT: 0.1
 
-model:
-  name: deformable_detr_r50
-  num_classes: 91
-  # HBS
-  hbs:
-    enabled: true
-    reduction: 4         # channel reduction r
-    kernel_schedule: stride_log2   # map stride->odd K as in SET
-    dilate_mask: 1
-  # API
-  api:
-    enabled: true
-    rho: 0.5             # L2 radius
-    lambda_cls: 1.0
-    lambda_reg: 0.0
+# Training Configuration
+TRAIN:
+  EPOCHS: 50
+  BATCH_SIZE: 32
+  LEARNING_RATE: 1.0e-4
+  WEIGHT_DECAY: 0.01
+  GRADIENT_CLIP: 1.0
+  
+  # Loss function weights
+  BBOX_LOSS_WEIGHT: 5.0
+  CLS_LOSS_WEIGHT: 1.0
+  
+  # Focal loss parameters
+  FOCAL_ALPHA: 0.25
+  FOCAL_GAMMA: 2.0
 
-optim:
-  name: adamw
-  lr: 2.0e-4
-  weight_decay: 0.05
-  epochs: 36
-  warmup_epochs: 1
-  grad_clip: 0.1
+# Data Configuration
+DATA:
+  NUM_WORKERS: 4
+  PIN_MEMORY: true
+  
+  # Augmentation
+  AUGMENT:
+    BRIGHTNESS_LIMIT: 0.2
+    CONTRAST_LIMIT: 0.3
+    BLUR_LIMIT: 3
+    ROTATION_LIMIT: 15
+    NOISE_VAR_LIMIT: [10.0, 50.0]
+    MIN_VISIBILITY: 0.1
 
-loss:
-  aux_weight: 0.5        # weight for auxiliary (HBS+API) path
+# Optimization
+OPTIMIZER:
+  NAME: "AdamW"
+  BETAS: [0.9, 0.999]
+  EPS: 1.0e-8
 
-log:
-  interval: 50
-  out_dir: ./runs
+# Learning Rate Scheduler
+SCHEDULER:
+  NAME: "ReduceLROnPlateau"
+  MODE: "min"
+  FACTOR: 0.5
+  PATIENCE: 3
+  VERBOSE: true
+
+# Device Configuration
+DEVICE: "cuda"  # or "cpu"
+
+# Checkpoint & Logging
+CHECKPOINT:
+  SAVE_DIR: "./checkpoints"
+  SAVE_INTERVAL: 5  # Save every N epochs
+  KEEP_TOP_K: 3  # Keep top 3 models
+
+LOGGING:
+  LOG_DIR: "./logs"
+  TENSORBOARD: true
+  PRINT_INTERVAL: 10  # Print stats every N batches
+
+# Inference
+INFERENCE:
+  CONFIDENCE_THRESHOLD: 0.5
+  NMS_THRESHOLD: 0.3
