@@ -42,7 +42,7 @@ class TinyObjectDataset(Dataset):
         with open(annotations_file, 'r') as f:
             for line in f:
                 parts = line.strip().split()
-                if not parts:
+                if not parts or parts[0].startswith('#'):
                     continue
                     
                 image_name = parts[0]
@@ -94,8 +94,16 @@ class TinyObjectDataset(Dataset):
             labels = augmented['class_labels']
         
         # Convert to tensors
+        if not boxes:
+            boxes = [[0, 0, 1, 1]]  # Dummy box
+            labels = [0]  # Background class
+            is_valid = [False]  # Mark as invalid
+        else:
+            is_valid = [True] * len(boxes)
+            
         return {
             'image': image,
-            'boxes': torch.tensor(boxes, dtype=torch.float32) if boxes else torch.zeros((0, 4)),
-            'labels': torch.tensor(labels, dtype=torch.long) if labels else torch.zeros(0, dtype=torch.long)
+            'boxes': torch.tensor(boxes, dtype=torch.float32),
+            'labels': torch.tensor(labels, dtype=torch.long),
+            'is_valid': torch.tensor(is_valid, dtype=torch.bool)
         }

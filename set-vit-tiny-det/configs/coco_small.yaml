@@ -1,0 +1,101 @@
+# Vision Transformer for Tiny Object Detection - COCO Small Config
+
+DEVICE: "cpu" # or 'cuda' if GPU available
+
+DATA:
+  TRAIN:
+    IMAGES: "data/train"
+    ANNOTATIONS: "data/train_annotations.txt"
+  VAL:
+    IMAGES: "data/val"
+    ANNOTATIONS: "data/val_annotations.txt"
+  TEST:
+    IMAGES: "data/test"
+    ANNOTATIONS: "data/test_annotations.txt"
+
+  # Dataset params
+  NUM_CLASSES: 2 # Based on our sample data (2 classes)
+  NUM_WORKERS: 0 # Use 0 for CPU
+  PIN_MEMORY: false # Set to false for CPU
+
+  # Augmentation
+  AUGMENT:
+    BRIGHTNESS_LIMIT: 0.2
+    CONTRAST_LIMIT: 0.3
+    BLUR_LIMIT: 3
+    ROTATION_LIMIT: 15
+    NOISE_VAR_LIMIT: [10.0, 50.0]
+    MIN_VISIBILITY: 0.1
+
+MODEL:
+  NAME: "TinyObjectViT"
+  IMAGE_SIZE: 512
+  PATCH_SIZE: 16
+  NUM_CLASSES: 2 # Match DATA.NUM_CLASSES
+  NUM_HEADS: 8 # Reduced for tiny model
+  NUM_LAYERS: 6 # Reduced for tiny model
+  MLP_DIM: 1024 # Reduced for tiny model
+  DROPOUT: 0.1
+  BACKBONE: "vit_tiny_patch16_224"
+  PRETRAINED: true
+
+  # HBS module
+  HBS:
+    ENABLED: true
+    REDUCTION: 16
+
+  # API module
+  API:
+    ENABLED: true
+    RHO: 0.1
+    LAMBDA_CLS: 1.0
+    LAMBDA_REG: 1.0
+
+# Training Configuration
+TRAIN:
+  EPOCHS: 2 # Small for testing
+  BATCH_SIZE: 2 # Small for testing
+  LEARNING_RATE: 1.0e-4
+  WEIGHT_DECAY: 0.01
+  GRADIENT_CLIP: 1.0
+
+  # Loss function weights
+  BBOX_LOSS_WEIGHT: 5.0
+  CLS_LOSS_WEIGHT: 1.0
+
+  # Focal loss parameters
+  FOCAL_ALPHA: 0.25
+  FOCAL_GAMMA: 2.0
+
+# Optimization
+OPTIMIZER:
+  NAME: "AdamW"
+  BETAS: [0.9, 0.999]
+  EPS: 1.0e-8
+
+# Learning Rate Scheduler
+SCHEDULER:
+  NAME: "ReduceLROnPlateau"
+  MODE: "min"
+  FACTOR: 0.5
+  PATIENCE: 3
+  VERBOSE: true
+
+# Checkpoint & Logging
+CHECKPOINT:
+  SAVE_DIR: "./checkpoints"
+  SAVE_INTERVAL: 1 # Save every epoch
+  KEEP_TOP_K: 2 # Keep top 2 models
+
+LOGGING:
+  LOG_DIR: "./logs"
+  TENSORBOARD: false # Set to true if you want tensorboard logs
+  PRINT_INTERVAL: 1 # Print stats every batch
+
+# Inference
+INFERENCE:
+  CONFIDENCE_THRESHOLD: 0.5
+  NMS_THRESHOLD: 0.3
+
+# Precision
+PRECISION: "fp32" # Use fp32 for CPU training

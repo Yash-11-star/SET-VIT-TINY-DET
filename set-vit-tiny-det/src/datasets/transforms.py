@@ -42,7 +42,7 @@ class TinyObjectAugmentation:
             ),
             
             # Forces robust feature learning
-            A.GaussBlur(blur_limit=3, p=0.3),
+            A.Blur(blur_limit=3, p=0.3),
             
             # Geometric invariance
             A.Rotate(limit=15, p=0.5),
@@ -55,7 +55,7 @@ class TinyObjectAugmentation:
             A.VerticalFlip(p=0.3),
             
             # Simulate real-world noisy conditions
-            A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
+            A.GaussNoise(p=0.5),
             
             # Normalization with ImageNet stats
             A.Normalize(

@@ -1,0 +1,2 @@
+sample001.jpg 10 10 30 30 0
+sample002.jpg

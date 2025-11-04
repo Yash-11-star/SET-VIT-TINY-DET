@@ -14,9 +14,14 @@ import torch.optim as optim
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.datasets import TinyObjectDataset, TinyObjectAugmentation
-from src.models import TinyObjectViT, TinyObjectLoss
-from src.utils import AverageMeter, ProgressMeter, is_main_process
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from datasets import TinyObjectDataset, TinyObjectAugmentation
+from datasets.collate import collate_variable_boxes
+from models import TinyObjectViT, TinyObjectLoss
+from utils import AverageMeter, ProgressMeter, is_main_process
 
 
 class Trainer:
@@ -104,24 +109,31 @@ class Trainer:
         train_cfg = self.config['TRAIN']
         
         for batch_idx, batch in enumerate(train_loader):
-            images = batch['image'].to(self.device)
-            boxes = batch['boxes'].to(self.device)
-            labels = batch['labels'].to(self.device)
+            # Get images and move to device
+            images = batch['images'].to(self.device)
+            
+            # Handle annotations (already as lists)
+            boxes = [b.to(self.device) for b in batch['boxes']]
+            labels = [l.to(self.device) for l in batch['labels']]
+            is_valid = [v.to(self.device) for v in batch['is_valid']]
             
             # Forward pass
             outputs = self.model(images)
             
-            # Prepare targets
+            # Prepare targets - apply is_valid per image
+            valid_boxes = []
+            valid_labels = []
+            for b, l, v in zip(boxes, labels, is_valid):
+                if v.any():
+                    valid_boxes.append(b[v])
+                    valid_labels.append(l[v])
+            
             targets = {
-                'boxes': boxes.view(-1, 4),
-                'labels': labels.view(-1)
+                'boxes': valid_boxes if valid_boxes else [torch.zeros(0, 4).to(self.device)],
+                'labels': valid_labels if valid_labels else [torch.zeros(0, dtype=torch.long).to(self.device)]
             }
             
-            # Flatten outputs
-            loss_outputs = {
-                'bbox_preds': outputs['bbox_preds'].view(-1, 4),
-                'cls_preds': outputs['cls_preds'].view(-1, self.config['MODEL']['NUM_CLASSES'])
-            }
+            loss_outputs = outputs  # Already in the right format
             
             # Compute loss
             loss_dict = self.criterion(loss_outputs, targets)
@@ -162,23 +174,34 @@ class Trainer:
         
         with torch.no_grad():
             for batch in val_loader:
-                images = batch['image'].to(self.device)
+                images = batch['images'].to(self.device)
                 boxes = batch['boxes'].to(self.device)
                 labels = batch['labels'].to(self.device)
+                is_valid = batch['is_valid'].to(self.device)
                 
                 # Forward pass
                 outputs = self.model(images)
                 
-                # Prepare targets
+                # Prepare targets - only consider valid boxes
+                valid_boxes = []
+                valid_labels = []
+                for i in range(len(boxes)):
+                    valid_boxes.append(boxes[i][is_valid[i]])
+                    valid_labels.append(labels[i][is_valid[i]])
+                
                 targets = {
-                    'boxes': boxes.view(-1, 4),
-                    'labels': labels.view(-1)
+                    'boxes': torch.cat(valid_boxes) if valid_boxes else torch.zeros(0, 4),
+                    'labels': torch.cat(valid_labels) if valid_labels else torch.zeros(0, dtype=torch.long)
                 }
                 
-                # Flatten outputs
+                # Get predictions corresponding to each patch and convert to boxes/classes
+                bbox_preds = outputs['bbox_preds'].view(-1, 4)
+                cls_preds = outputs['cls_preds'].view(-1, model_cfg['NUM_CLASSES'])
+                
+                # Prepare loss inputs
                 loss_outputs = {
-                    'bbox_preds': outputs['bbox_preds'].view(-1, 4),
-                    'cls_preds': outputs['cls_preds'].view(-1, model_cfg['NUM_CLASSES'])
+                    'bbox_preds': bbox_preds,
+                    'cls_preds': cls_preds
                 }
                 
                 # Compute loss
@@ -190,35 +213,18 @@ class Trainer:
         return loss_meter.avg
     
     def train(self, train_loader, val_loader, num_epochs):
-        """
-        Complete training loop
+            self.model.train()
+            meter = AverageMeter('Loss', ':.4f')
+            prog = ProgressMeter(len(train_loader), [meter], prefix=f'Epoch [{epoch}]')
         
-        Args:
-            train_loader: Training data loader
-            val_loader: Validation data loader
-            num_epochs: Number of epochs
-        """
-        if is_main_process():
-            print(f"\nStarting training for {num_epochs} epochs...\n")
-        
-        for epoch in range(1, num_epochs + 1):
-            # Train
-            train_loss = self.train_epoch(train_loader, epoch)
-            
-            # Validate
-            val_loss = self.evaluate(val_loader)
-            
+            for batch_idx, batch in enumerate(train_loader):
             # Update learning rate
-            self.scheduler.step(val_loss)
-            
             if is_main_process():
                 print(f"\nEpoch {epoch}/{num_epochs}")
                 print(f"  Train Loss: {train_loss:.4f}")
                 print(f"  Val Loss:   {val_loss:.4f}")
-                print(f"  LR:         {self.optimizer.param_groups[0]['lr']:.2e}")
                 
                 # Save best model
-                if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
                     save_path = self.checkpoint_dir / 'best_model.pt'
                     torch.save(self.model.state_dict(), save_path)
@@ -234,29 +240,19 @@ class Trainer:
             print(f"\n✅ Training complete!")
 
 
-def load_config(config_path):
-    """Load configuration from YAML file"""
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
+                loss_dict = self.criterion(outputs, targets)
 
 
-def main():
     """Main training entry point"""
     parser = argparse.ArgumentParser(description='Train tiny object detection model')
-    parser.add_argument('--config', type=str, default='configs/default.yaml',
-                       help='Path to config file')
-    parser.add_argument('--train-data', type=str, default='data/train',
-                       help='Training data directory')
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['TRAIN']['GRADIENT_CLIP'])
     parser.add_argument('--train-annot', type=str, default='data/train_annotations.txt',
                        help='Training annotations file')
-    parser.add_argument('--val-data', type=str, default='data/val',
-                       help='Validation data directory')
-    parser.add_argument('--val-annot', type=str, default='data/val_annotations.txt',
-                       help='Validation annotations file')
-    parser.add_argument('--epochs', type=int, default=None,
+                meter.update(loss.item(), n=images.size(0))
+                if (batch_idx + 1) % self.config['TRAIN']['PRINT_INTERVAL'] == 0 and is_main_process():
+                    prog.display(batch_idx + 1)
                        help='Number of epochs (overrides config)')
-    
+            return meter.avg
     args = parser.parse_args()
     
     # Load config
@@ -292,7 +288,8 @@ def main():
         batch_size=config['TRAIN']['BATCH_SIZE'],
         shuffle=True,
         num_workers=config['DATA']['NUM_WORKERS'],
-        pin_memory=config['DATA']['PIN_MEMORY']
+        pin_memory=config['DATA']['PIN_MEMORY'],
+        collate_fn=collate_variable_boxes
     )
     
     val_loader = DataLoader(
@@ -300,7 +297,8 @@ def main():
         batch_size=config['TRAIN']['BATCH_SIZE'],
         shuffle=False,
         num_workers=config['DATA']['NUM_WORKERS'],
-        pin_memory=config['DATA']['PIN_MEMORY']
+        pin_memory=config['DATA']['PIN_MEMORY'],
+        collate_fn=collate_variable_boxes
     )
     
     # Initialize trainer

@@ -1,0 +1,4 @@
+# Format: image_name.jpg x1 y1 x2 y2 class [x1 y1 x2 y2 class ...]
+# Example:
+# image_001.jpg 50 100 75 125 0
+# image_002.jpg 10 10 30 30 0 200 50 240 90 1
