@@ -34,9 +34,7 @@ env/
 .DS_Store
 
 # Data and Models
-data/train/
-data/val/
-data/test/
+
 data/*.jpg
 data/*.png
 checkpoints/
